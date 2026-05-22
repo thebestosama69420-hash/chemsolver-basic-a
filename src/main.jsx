@@ -1,335 +1,42 @@
-import React, { useMemo, useState } from "react";
-import { createRoot } from "react-dom/client";
-import {
-  Calculator, Flame, GitBranch, RotateCcw, Beaker, Wind, TestTube2,
-  Droplets, Factory, Moon, Sun, Thermometer, AlertTriangle, BookOpen
-} from "lucide-react";
+
+import React, {useState, useMemo} from "react";
+import {createRoot} from "react-dom/client";
+import {Beaker, Moon, Sun, LayoutTemplate, FileText, Map, Calculator, Droplets, Factory, GitBranch, TestTube2, Wind, Flame, Thermometer, AlertTriangle, Eye, EyeOff, BookOpen} from "lucide-react";
 import "./style.css";
 
-const WATER_DENSITY = 1000;
-const R = 8.314472;
+const WATER_DENSITY=1000, R=8.314472;
+const conv={Pressure:{Pa:1,kPa:1000,bar:100000,atm:101325,psi:6894.757,mmHg:133.322},Energy:{J:1,kJ:1000,cal:4.184,kcal:4184,Btu:1055.06},Mass:{g:.001,kg:1,lbm:.45359237},Volume:{L:.001,m3:1,cm3:1e-6,ft3:.0283168}};
+const n=v=>{let x=Number(v);return Number.isFinite(x)?x:NaN};
+const fmt=(v,d=4)=>!Number.isFinite(v)?"ERROR":(Math.abs(v)>=10000||(Math.abs(v)>0&&Math.abs(v)<.001)?v.toExponential(4):Number(v.toFixed(d)).toString());
+function frac(v,name="Fraction"){let x=n(v); if(!Number.isFinite(x)) return {err:`${name} must be a number.`}; if(x<0||x>100)return {err:`${name} must be 0–1 or 0%–100%.`}; return {val:x<=1?x:x/100,label:x<=1?`${x}`:`${x}% = ${fmt(x/100)}`}}
+function neg(label,v){let x=n(v); if(!Number.isFinite(x))return `${label} must be a number.`; if(x<0)return `${label} cannot be less than 0.`; return ""}
+function kerr(label,c){let K=n(c)+273.15; if(!Number.isFinite(K))return `${label} must be a valid temperature.`; if(K<0)return `${label} cannot be less than 0 K.`; return ""}
+function first(a){return a.filter(Boolean)[0]||""}
+function Logo(){return <div className="logo"><span>ΔH</span></div>}
+function Card(p){return <div className="card">{p.children}</div>}
+function Header({title,text}){return <><h2>{title}</h2><p className="muted">{text}</p></>}
+function Alert({msg}){return msg?<div className="alert"><AlertTriangle size={18}/>{msg}</div>:null}
+function Ref({items}){return <div className="ref"><b><BookOpen size={16}/> Equation Reference</b><ul>{items.map((i,k)=><li key={k}>{i}</li>)}</ul></div>}
+function Input({label,value,setValue,unit}){return <label className="field"><span>{label}</span><div><input type="number" step="any" value={value} onChange={e=>setValue(e.target.value)}/>{unit&&<em>{unit}</em>}</div></label>}
+function Select({label,value,setValue,options}){return <label className="field"><span>{label}</span><select value={value} onChange={e=>setValue(e.target.value)}>{options.map(o=><option key={o}>{o}</option>)}</select></label>}
+function Result({title,children}){return <div className="res"><b>{title}</b><pre>{children}</pre></div>}
+function ToggleSol({err,finalAns,full}){const [show,setShow]=useState(false); if(err)return <Result title="Final Answer">ERROR: Fix invalid input first.</Result>; return <><Result title="Final Answer">{finalAns}</Result><button className="mini" onClick={()=>setShow(!show)}>{show?<EyeOff size={16}/>:<Eye size={16}/>} {show?"Hide Full Solution":"Show Full Solution"}</button>{show&&<Result title="Full Solution">{full}</Result>}</>}
+function Flow({type="single"}){let map={single:["Feed","Unit","Product"],reactor:["Feed","Reactor","Outlet"],separator:["Feed","Separator","Top + Bottom"],recycle:["Fresh Feed","Mixer → Reactor → Separator","Product + Recycle/Purge"],heater:["Cold Stream","Heater","Hot Stream"]};let x=map[type];return <div className="flow"><span>{x[0]}</span><b>→</b><span className="strong">{x[1]}</span><b>→</b><span>{x[2]}</span></div>}
+function Nav({id,tab,setTab,Icon,title,sub}){return <button className={tab===id?"nav active":"nav"} onClick={()=>setTab(id)}><Icon size={20}/><span><b>{title}</b><small>{sub}</small></span></button>}
 
-const conversions = {
-  Pressure: { Pa: 1, kPa: 1000, bar: 100000, atm: 101325, psi: 6894.757, mmHg: 133.322 },
-  Energy: { J: 1, kJ: 1000, cal: 4.184, kcal: 4184, Btu: 1055.06 },
-  Temperature: { C: "C", K: "K", F: "F" },
-  Mass: { g: 0.001, kg: 1, lbm: 0.45359237 },
-  Volume: { L: 0.001, m3: 1, cm3: 1e-6, ft3: 0.0283168 },
-  Flowrate: { "kg/s": 1, "kg/h": 1 / 3600, "g/s": 0.001, "lbm/h": 0.45359237 / 3600 },
-};
+function Templates({go}){let t=[["SG to kmol","sg","SG, volume, MW → moles"],["Tank overflow","tank","input/output → time"],["Reactor A→C","material","feed + conversion"],["Limiting reactant","stoich","stoich ratio"],["Ideal gas","gas","PV=nRT"],["Humidity","humidity","P, P*, Sr"],["Steam heater","steam","enthalpy duty"]];return <Card><Header title="Question Templates" text="Pick a common BASIC-A problem type."/><div className="templates">{t.map(x=><button key={x[0]} onClick={()=>go(x[1])}><b>{x[0]}</b><span>{x[2]}</span></button>)}</div></Card>}
+function Equations(){let s=[["Chapter 3",["ρ=m/V","SG=ρmaterial/ρwater","n=m/MW","mass fraction=mA/mtotal","mole fraction=nA/ntotal"]],["Chapter 4",["Input+Generation−Output−Consumption=Accumulation","Steady state: Acc=0","Conversion=(nin−nout)/nin","Excess%=(nin−nstoch)/nstoch×100"]],["Chapter 5/6",["PV=nRT","Pabs=Pgauge+Patm","Pi=yiP","Raoult: Pi=xiPi*","Antoine: log10(P*)=A−B/(T+C)"]],["Chapter 7/8",["Q−Ws=ΔH","Q=mDotCpΔT","Q=mDot(hout−hin)","Wet steam: h=hf+x(hg−hf)"]]];return <Card><Header title="Equation Sheet" text="Core BASIC-A equations."/><div className="eqs">{s.map(([h,a])=><div><h3>{h}</h3><ul>{a.map(i=><li>{i}</li>)}</ul></div>)}</div></Card>}
+function FlowPage(){return <Card><Header title="Flow Diagrams" text="Simple visual layouts."/><h3>Single Unit</h3><Flow/><h3>Reactor</h3><Flow type="reactor"/><h3>Separator</h3><Flow type="separator"/><h3>Recycle/Purge</h3><Flow type="recycle"/><h3>Heater</h3><Flow type="heater"/></Card>}
 
-function number(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : NaN;
-}
-function fmt(value, digits = 4) {
-  if (!Number.isFinite(value)) return "ERROR";
-  if (Math.abs(value) >= 10000 || (Math.abs(value) > 0 && Math.abs(value) < 0.001)) return value.toExponential(4);
-  return Number(value.toFixed(digits)).toString();
-}
-function tempToC(value, unit) {
-  if (unit === "C") return value;
-  if (unit === "K") return value - 273.15;
-  if (unit === "F") return (value - 32) * 5 / 9;
-  return value;
-}
-function cToTemp(value, unit) {
-  if (unit === "C") return value;
-  if (unit === "K") return value + 273.15;
-  if (unit === "F") return value * 9 / 5 + 32;
-  return value;
-}
-function toFraction(value) {
-  const v = number(value);
-  if (!Number.isFinite(v)) return { error: true, value: NaN, message: "Invalid number." };
-  if (v < 0 || v > 100) return { error: true, value: NaN, message: "Fraction must be 0–1 or 0%–100%." };
-  if (v <= 1) return { error: false, value: v, label: `${v}` };
-  return { error: false, value: v / 100, label: `${v}% = ${fmt(v / 100)}` };
-}
-function invalidNegative(label, value) {
-  const v = number(value);
-  if (!Number.isFinite(v)) return `${label} must be a valid number.`;
-  if (v < 0) return `${label} cannot be less than 0.`;
-  return "";
-}
-function celsiusToKelvin(c) { return number(c) + 273.15; }
-function kelvinError(label, kelvin) {
-  if (!Number.isFinite(kelvin)) return `${label} must be a valid temperature.`;
-  if (kelvin < 0) return `${label} cannot be less than 0 K.`;
-  return "";
-}
+function SG(){const [sg,setSg]=useState("13.546"),[v,setV]=useState("175"),[mw,setMw]=useState("200.61");let err=first([neg("SG",sg),neg("Volume",v),neg("MW",mw),n(mw)===0?"MW cannot be zero.":""]);let rho=err?NaN:n(sg)*WATER_DENSITY,m=err?NaN:rho*n(v),kmol=err?NaN:m/n(mw);return <Card><Header title="SG → Density → Mass → kmol" text="Specific gravity solver."/><Ref items={["ρ=SG×ρwater","m=ρV","n=m/MW","Mass and moles cannot be negative."]}/><Alert msg={err}/><div className="grid3"><Input label="SG" value={sg} setValue={setSg}/><Input label="Volume" value={v} setValue={setV} unit="m³"/><Input label="MW" value={mw} setValue={setMw} unit="kg/kmol"/></div><ToggleSol err={err} finalAns={`n = ${fmt(kmol)} kmol`} full={`ρ=${sg}×1000=${fmt(rho)} kg/m³\nm=ρV=${fmt(m)} kg\nn=m/MW=${fmt(kmol)} kmol`}/></Card>}
+function Tank(){const [i,setI]=useState("6"),[o,setO]=useState("3"),[v,setV]=useState("1");let acc=n(i)-n(o);let err=first([neg("Input",i),neg("Output",o),neg("Volume",v),acc<=0?"Input must be greater than output.":""]);let time=err?NaN:1000*n(v)/acc;return <Card><Header title="Unsteady Tank Balance" text="Input - Output = Accumulation."/><Flow/><Ref items={["Accumulation=Input−Output","Δm=ρΔV","Δt=Δm/Accumulation"]}/><Alert msg={err}/><div className="grid3"><Input label="Input" value={i} setValue={setI} unit="kg/s"/><Input label="Output" value={o} setValue={setO} unit="kg/s"/><Input label="Volume" value={v} setValue={setV} unit="m³"/></div><ToggleSol err={err} finalAns={`Time = ${fmt(time)} s`} full={`Acc=${i}-${o}=${fmt(acc)} kg/s\nΔm=1000×${v}=${fmt(1000*n(v))} kg\nΔt=Δm/Acc=${fmt(time)} s`}/></Card>}
+function Material(){const [F,setF]=useState("100"),[x,setX]=useState("0.4"),[c,setC]=useState("75");let xf=frac(x,"xA"),cf=frac(c,"Conversion");let err=first([neg("Feed",F),xf.err,cf.err]);let A=n(F)*xf.val,react=A*cf.val,out=A-react;return <Card><Header title="Material Balance" text="Simple A → C reactor."/><Flow type="reactor"/><Ref items={["x/y fractions accept 0–1 or 0%–100%.","A reacted=A in×conversion","A out=A in−A reacted"]}/><Alert msg={err}/><div className="grid3"><Input label="Feed" value={F} setValue={setF}/><Input label="xA" value={x} setValue={setX} unit="0–1 or %"/><Input label="Conversion" value={c} setValue={setC} unit="0–1 or %"/></div><ToggleSol err={err} finalAns={`A out=${fmt(out)}, C out=${fmt(react)}`} full={`xA=${xf.label}\nX=${cf.label}\nAin=F×xA=${fmt(A)}\nA reacted=${fmt(react)}\nA out=${fmt(out)}`}/></Card>}
+function Stoich(){const [a,setA]=useState("2"),[b,setB]=useState("1"),[A,setNA]=useState("30"),[B,setNB]=useState("80"),[e,setE]=useState("0");let err=first([neg("a",a),neg("b",b),neg("moles A",A),neg("moles B",B),neg("extent",e),n(a)===0||n(b)===0?"Coefficients cannot be zero.":""]);let req=n(A)*n(b)/n(a),ex=n(B)>req;return <Card><Header title="Stoichiometry" text="Limiting/excess reactant."/><Ref items={["Required B=nA×b/a","Moles cannot be negative.","Extent is blocked from being negative here."]}/><Alert msg={err}/><div className="grid5"><Input label="a" value={a} setValue={setA}/><Input label="b" value={b} setValue={setB}/><Input label="nA" value={A} setValue={setNA}/><Input label="nB" value={B} setValue={setNB}/><Input label="ξ" value={e} setValue={setE}/></div><ToggleSol err={err} finalAns={ex?"B excess, A limiting":"B limiting, A excess"} full={`Required B=${A}×${b}/${a}=${fmt(req)}\nActual B=${B}`}/></Card>}
+function Gas(){const [P,setP]=useState("122"),[V,setV]=useState("1.25"),[T,setT]=useState("150");let K=n(T)+273.15;let err=first([neg("Pressure",P),neg("Volume",V),kerr("Temperature",T)]);let mol=err?NaN:n(P)*n(V)*1000/(R*K);return <Card><Header title="Ideal Gas" text="PV = nRT."/><Ref items={["P must be absolute.","T(K)=T(°C)+273.15","T(K) cannot be less than 0."]}/><Alert msg={err}/><div className="grid3"><Input label="P" value={P} setValue={setP} unit="kPa"/><Input label="Vdot" value={V} setValue={setV} unit="m³/min"/><Input label="T" value={T} setValue={setT} unit="°C"/></div><ToggleSol err={err} finalAns={`nDot=${fmt(mol)} mol/min`} full={`T=${fmt(K)} K\nnDot=PVDot/RT=${fmt(mol)} mol/min`}/></Card>}
+function Humidity(){const [P,setP]=useState("101.325"),[ps,setPs]=useState("23.76"),[rh,setRh]=useState("60");let rf=frac(rh,"Relative humidity");let err=first([neg("Total pressure",P),neg("Vapor pressure",ps),rf.err,n(ps)>=n(P)?"P* must be less than total P.":""]);let Pi=rf.val*n(ps),y=Pi/n(P),H=y/(1-y);return <Card><Header title="Raoult / Humidity" text="One condensable component."/><Ref items={["Sr=Pi/Pi*×100","Pi=yiP","Molal humidity=yi/(1−yi)"]}/><Alert msg={err}/><div className="grid3"><Input label="P" value={P} setValue={setP}/><Input label="P*" value={ps} setValue={setPs}/><Input label="Sr" value={rh} setValue={setRh} unit="0–1 or %"/></div><ToggleSol err={err} finalAns={`yi=${fmt(y)}, H=${fmt(H)}`} full={`Sr=${rf.label}\nPi=Sr×P*=${fmt(Pi)}\nyi=Pi/P=${fmt(y)}\nH=yi/(1-yi)=${fmt(H)}`}/></Card>}
+function Energy(){const [m,setM]=useState("2"),[cp,setCp]=useState("4.18"),[ti,setTi]=useState("25"),[to,setTo]=useState("80");let err=first([neg("Mass flowrate",m),neg("Cp",cp),kerr("Tin",ti),kerr("Tout",to)]);let Q=n(m)*n(cp)*(n(to)-n(ti));return <Card><Header title="Energy Balance" text="Basic heating/cooling duty."/><Flow type="heater"/><Ref items={["Q=mDotCpΔT","Mass cannot be negative.","Temperature in Kelvin cannot be less than 0."]}/><Alert msg={err}/><div className="grid4"><Input label="mDot" value={m} setValue={setM}/><Input label="Cp" value={cp} setValue={setCp}/><Input label="Tin" value={ti} setValue={setTi}/><Input label="Tout" value={to} setValue={setTo}/></div><ToggleSol err={err} finalAns={`Q=${fmt(Q)} kW`} full={`ΔT=${to}-${ti}=${fmt(n(to)-n(ti))}\nQ=${m}×${cp}×${fmt(n(to)-n(ti))}=${fmt(Q)} kW`}/></Card>}
+function Steam(){const [hf,setHf]=useState("419"),[hg,setHg]=useState("2676"),[x,setX]=useState("0.85");let xf=frac(x,"Quality");let err=first([neg("hf",hf),neg("hg",hg),xf.err]);let h=n(hf)+xf.val*(n(hg)-n(hf));return <Card><Header title="Steam / Enthalpy" text="Steam table helper."/><Ref items={["Wet steam: h=hf+x(hg−hf)","Full steam table search is next heavy upgrade."]}/><Alert msg={err}/><div className="grid3"><Input label="hf" value={hf} setValue={setHf}/><Input label="hg" value={hg} setValue={setHg}/><Input label="Quality x" value={x} setValue={setX} unit="0–1 or %"/></div><ToggleSol err={err} finalAns={`h=${fmt(h)} kJ/kg`} full={`x=${xf.label}\nh=${hf}+${fmt(xf.val)}(${hg}-${hf})=${fmt(h)} kJ/kg`}/></Card>}
+function Converter(){const [cat,setCat]=useState("Pressure"),[from,setFrom]=useState("Pa"),[to,setTo]=useState("kPa"),[val,setVal]=useState("1000");let keys=Object.keys(conv[cat]);React.useEffect(()=>{setFrom(Object.keys(conv[cat])[0]);setTo(Object.keys(conv[cat])[1])},[cat]);let ans=n(val)*conv[cat][from]/conv[cat][to];return <Card><Header title="Unit Converter" text="Fast conversion helper."/><div className="grid4"><Select label="Category" value={cat} setValue={setCat} options={Object.keys(conv)}/><Input label="Value" value={val} setValue={setVal}/><Select label="From" value={from} setValue={setFrom} options={keys}/><Select label="To" value={to} setValue={setTo} options={keys}/></div><ToggleSol err="" finalAns={`${val} ${from} = ${fmt(ans)} ${to}`} full={`Convert ${from} to ${to}\nAnswer=${fmt(ans)} ${to}`}/></Card>}
 
-function LogoMark({ dark }) {
-  return <div className="logo-mark">
-    <div className="logo-neck" />
-    <div className="logo-flask" />
-    <div className="logo-liquid" />
-    <div className="logo-text">ΔH</div>
-  </div>;
-}
-function Header({ title, text }) {
-  return <div className="section-header"><h2>{title}</h2><p>{text}</p></div>;
-}
-function AlertBox({ children }) {
-  if (!children) return null;
-  return <div className="alert"><AlertTriangle size={18} /> <span>{children}</span></div>;
-}
-function Reference({ items }) {
-  return <div className="reference"><div className="ref-title"><BookOpen size={16}/> Equation Reference</div><ul>{items.map((x,i)=><li key={i}>{x}</li>)}</ul></div>;
-}
-function Input({ label, value, setValue, unit }) {
-  return <label className="field"><span>{label}</span><div className="input-wrap"><input value={value} onChange={e=>setValue(e.target.value)} type="number" step="any" />{unit && <em>{unit}</em>}</div></label>;
-}
-function Select({ label, value, setValue, options }) {
-  return <label className="field"><span>{label}</span><select value={value} onChange={e=>setValue(e.target.value)}>{options.map(o=><option key={o}>{o}</option>)}</select></label>;
-}
-function ResultBox({ title, children }) {
-  return <div className="result"><b>{title}</b><pre>{children}</pre></div>;
-}
-function Card({ children }) { return <div className="card">{children}</div>; }
-function SectionButton({ active, onClick, icon: Icon, title, subtitle }) {
-  return <button onClick={onClick} className={`side-btn ${active ? "active" : ""}`}><span className="side-icon"><Icon size={20}/></span><span><b>{title}</b><small>{subtitle}</small></span></button>
-}
-
-function UnitConverter() {
-  const [category, setCategory] = useState("Pressure");
-  const units = Object.keys(conversions[category]);
-  const [from, setFrom] = useState(units[0]);
-  const [to, setTo] = useState(units[1] || units[0]);
-  const [value, setValue] = useState("1");
-  React.useEffect(() => { const u = Object.keys(conversions[category]); setFrom(u[0]); setTo(u[1] || u[0]); }, [category]);
-  const result = useMemo(() => {
-    const v = number(value);
-    if (!Number.isFinite(v)) return NaN;
-    if (category === "Temperature") return cToTemp(tempToC(v, from), to);
-    return (v * conversions[category][from]) / conversions[category][to];
-  }, [category, from, to, value]);
-  return <Card><Header title="Unit Converter" text="Chapter 3 style unit conversion."/>
-    <Reference items={["Units must cancel correctly.", "Temperature conversion is handled separately.", "Negative values are allowed only where physically meaningful."]}/>
-    <div className="grid4"><Select label="Category" value={category} setValue={setCategory} options={Object.keys(conversions)} /><Input label="Value" value={value} setValue={setValue}/><Select label="From" value={from} setValue={setFrom} options={Object.keys(conversions[category])}/><Select label="To" value={to} setValue={setTo} options={Object.keys(conversions[category])}/></div>
-    <ResultBox title="Final Answer">{`${value} ${from} = ${fmt(result)} ${to}`}</ResultBox>
-  </Card>
-}
-
-function SGMoles() {
-  const [sg,setSg]=useState("13.546"), [vol,setVol]=useState("175"), [mw,setMw]=useState("200.61");
-  const errors = [invalidNegative("Specific gravity",sg), invalidNegative("Volume",vol), invalidNegative("Molecular weight",mw)].filter(Boolean);
-  if (number(mw)===0) errors.push("Molecular weight cannot be zero.");
-  const error = errors[0] || "";
-  const rho = error ? NaN : number(sg)*WATER_DENSITY, mass = error ? NaN : rho*number(vol), kmol = error ? NaN : mass/number(mw);
-  return <Card><Header title="SG → Density → Mass → kmol" text="Specific gravity and mole calculation."/>
-    <Reference items={["ρmaterial = SG × ρwater", "m = ρV", "n = m/MW", "Mass, volume, and moles cannot be negative."]}/>
-    <AlertBox>{error}</AlertBox>
-    <div className="grid3"><Input label="Specific Gravity" value={sg} setValue={setSg}/><Input label="Volume" value={vol} setValue={setVol} unit="m³"/><Input label="MW" value={mw} setValue={setMw} unit="kg/kmol"/></div>
-    <ResultBox title="Solution Steps">{`ρ = ${sg} × 1000 = ${fmt(rho)} kg/m³
-m = ρV = ${fmt(rho)} × ${vol} = ${fmt(mass)} kg
-n = m/MW = ${fmt(mass)} / ${mw} = ${fmt(kmol)} kmol`}</ResultBox>
-  </Card>
-}
-
-function CompositionSolver() {
-  const [mA,setMA]=useState("65"),[mB,setMB]=useState("35"),[mwA,setMwA]=useState("78.11"),[mwB,setMwB]=useState("92.14");
-  const errors=[invalidNegative("Mass A",mA),invalidNegative("Mass B",mB),invalidNegative("MW A",mwA),invalidNegative("MW B",mwB)].filter(Boolean);
-  if(number(mwA)===0||number(mwB)===0) errors.push("Molecular weight cannot be zero.");
-  const error=errors[0]||"";
-  const nA=error?NaN:number(mA)/number(mwA), nB=error?NaN:number(mB)/number(mwB);
-  const wA=error?NaN:number(mA)/(number(mA)+number(mB)), yA=error?NaN:nA/(nA+nB);
-  return <Card><Header title="Mass Fraction ↔ Mole Fraction" text="Binary mixture composition conversion."/>
-    <Reference items={["Mass fraction = component mass / total mass", "Mole fraction = component moles / total moles", "Fractions must be 0–1 or 0%–100%.", "Mass and moles cannot be negative."]}/>
-    <AlertBox>{error}</AlertBox>
-    <div className="grid4"><Input label="Mass A" value={mA} setValue={setMA}/><Input label="Mass B" value={mB} setValue={setMB}/><Input label="MW A" value={mwA} setValue={setMwA}/><Input label="MW B" value={mwB} setValue={setMwB}/></div>
-    <ResultBox title="Final Answer">{`Mass fractions: A = ${fmt(wA)}, B = ${fmt(1-wA)}
-Mole fractions: A = ${fmt(yA)}, B = ${fmt(1-yA)}`}</ResultBox>
-  </Card>
-}
-
-function TankBalance() {
-  const [input,setInput]=useState("6"),[output,setOutput]=useState("3"),[volume,setVolume]=useState("1");
-  const errors=[invalidNegative("Input flowrate",input),invalidNegative("Output flowrate",output),invalidNegative("Volume",volume)].filter(Boolean);
-  const acc=number(input)-number(output);
-  if(!errors.length && acc<=0) errors.push("Input must be greater than output for filling/overflow time.");
-  const error=errors[0]||"";
-  const time=error?NaN:WATER_DENSITY*number(volume)/acc;
-  return <Card><Header title="Unsteady Tank Balance" text="Input - Output = Accumulation."/>
-    <Reference items={["Accumulation = Input − Output", "Δm = ρΔV", "Δt = Δm/Accumulation", "Flowrates cannot be negative."]}/>
-    <AlertBox>{error}</AlertBox>
-    <div className="grid3"><Input label="Input" value={input} setValue={setInput} unit="kg/s"/><Input label="Output" value={output} setValue={setOutput} unit="kg/s"/><Input label="Volume to fill" value={volume} setValue={setVolume} unit="m³"/></div>
-    <ResultBox title="Final Answer">{`Accumulation = ${input} - ${output} = ${fmt(acc)} kg/s
-Time = 1000 × ${volume} / ${fmt(acc)} = ${fmt(time)} s = ${fmt(time/60)} min`}</ResultBox>
-  </Card>
-}
-
-function MaterialBalance() {
-  const [feed,setFeed]=useState("100"),[xA,setXA]=useState("0.40"),[conv,setConv]=useState("75");
-  const xf=toFraction(xA), cf=toFraction(conv);
-  const errors=[invalidNegative("Feed",feed)].filter(Boolean);
-  if(xf.error) errors.push("Mole fraction must be 0–1 or 0%–100%.");
-  if(cf.error) errors.push("Conversion must be 0–1 or 0%–100%.");
-  const error=errors[0]||"";
-  const F=error?NaN:number(feed), xa=error?NaN:xf.value, X=error?NaN:cf.value, xb=error?NaN:1-xa;
-  const AIn=F*xa, BIn=F*xb, AReacted=AIn*X, AOut=AIn-AReacted, COut=AReacted;
-  return <Card><Header title="Simple Reactive Material Balance" text="A → C with inert B."/>
-    <Reference items={["x and y fractions accept 0–1 or 0%–100%.", "A reacted = A in × conversion", "A out = A in − A reacted", "Negative mass/moles are blocked."]}/>
-    <AlertBox>{error}</AlertBox>
-    <div className="grid3"><Input label="Feed" value={feed} setValue={setFeed} unit="mol/h"/><Input label="xA" value={xA} setValue={setXA} unit="0–1 or %"/><Input label="Conversion" value={conv} setValue={setConv} unit="0–1 or %"/></div>
-    <ResultBox title="Solution">{`xA = ${xf.error ? "ERROR" : xf.label}
-X = ${cf.error ? "ERROR" : cf.label}
-A in = ${fmt(AIn)}
-B in = ${fmt(BIn)}
-A reacted = ${fmt(AReacted)}
-A out = ${fmt(AOut)}
-C out = ${fmt(COut)}`}</ResultBox>
-  </Card>
-}
-
-function StoichSolver() {
-  const [a,setA]=useState("2"),[b,setB]=useState("1"),[nA,setNA]=useState("30"),[nB,setNB]=useState("80"),[extent,setExtent]=useState("0");
-  const errors=[invalidNegative("Coefficient a",a),invalidNegative("Coefficient b",b),invalidNegative("Moles A",nA),invalidNegative("Moles B",nB),invalidNegative("Extent",extent)].filter(Boolean);
-  if(number(a)===0||number(b)===0) errors.push("Stoichiometric coefficients cannot be zero.");
-  const error=errors[0]||"";
-  const bSt=error?NaN:number(nA)*number(b)/number(a), bEx=!error&&number(nB)>bSt, exPct=error?NaN:(number(nB)-bSt)/bSt*100;
-  return <Card><Header title="Limiting / Excess Reactant" text="aA + bB → products."/>
-    <Reference items={["Required B = nA × b/a", "Moles cannot be negative.", "Extent is blocked from being negative in this BASIC-A version.", "Reverse reaction/equilibrium extent may be added later."]}/>
-    <AlertBox>{error}</AlertBox>
-    <div className="grid5"><Input label="a" value={a} setValue={setA}/><Input label="b" value={b} setValue={setB}/><Input label="nA" value={nA} setValue={setNA}/><Input label="nB" value={nB} setValue={setNB}/><Input label="Extent ξ" value={extent} setValue={setExtent}/></div>
-    <ResultBox title="Final Answer">{`Required B(stoich) = ${fmt(bSt)}
-${bEx ? "B is excess, A is limiting." : "B is limiting, A is excess."}
-Excess % = ${fmt(exPct)}%`}</ResultBox>
-  </Card>
-}
-
-function IdealGas() {
-  const [P,setP]=useState("122"),[V,setV]=useState("1.25"),[T,setT]=useState("150");
-  const TK=celsiusToKelvin(T);
-  const errors=[invalidNegative("Pressure",P),invalidNegative("Volume",V),kelvinError("Temperature",TK)].filter(Boolean);
-  const error=errors[0]||"";
-  const n=error?NaN:number(P)*(number(V)*1000)/(R*TK);
-  return <Card><Header title="Ideal Gas Solver" text="PV = nRT."/>
-    <Reference items={["P must be absolute.", "T(K) = T(°C) + 273.15", "Temperature in Kelvin cannot be less than 0.", "Pressure/volume cannot be negative."]}/>
-    <AlertBox>{error}</AlertBox>
-    <div className="grid3"><Input label="Pressure" value={P} setValue={setP} unit="kPa abs"/><Input label="Volumetric flow" value={V} setValue={setV} unit="m³/min"/><Input label="Temperature" value={T} setValue={setT} unit="°C"/></div>
-    <ResultBox title="Final Answer">{`T = ${fmt(TK)} K
-nDot = PVDot/RT = ${fmt(n)} mol/min = ${fmt(n/60)} mol/s`}</ResultBox>
-  </Card>
-}
-
-function HumiditySolver() {
-  const [P,setP]=useState("101.325"),[ps,setPs]=useState("23.76"),[sr,setSr]=useState("60");
-  const sf=toFraction(sr);
-  const errors=[invalidNegative("Total pressure",P),invalidNegative("Vapor pressure",ps)].filter(Boolean);
-  if(sf.error) errors.push("Relative humidity must be 0–1 or 0%–100%.");
-  if(!errors.length && number(ps)>=number(P)) errors.push("Vapor pressure must be less than total pressure.");
-  const error=errors[0]||"";
-  const Pi=error?NaN:sf.value*number(ps), y=error?NaN:Pi/number(P), H=error?NaN:y/(1-y);
-  return <Card><Header title="Raoult / Humidity Solver" text="One condensable component."/>
-    <Reference items={["Sr = Pi/Pi* × 100", "Pi = yiP", "Molal humidity = yi/(1−yi)", "Humidity accepts 0–1 or 0%–100%."]}/>
-    <AlertBox>{error}</AlertBox>
-    <div className="grid3"><Input label="Total P" value={P} setValue={setP} unit="kPa"/><Input label="P*" value={ps} setValue={setPs} unit="kPa"/><Input label="Relative humidity" value={sr} setValue={setSr} unit="0–1 or %"/></div>
-    <ResultBox title="Final Answer">{`Pi = ${fmt(Pi)} kPa
-yi = ${fmt(y)}
-Molal humidity = ${fmt(H)} mol vapor/mol dry gas`}</ResultBox>
-  </Card>
-}
-
-function AntoineSolver() {
-  const [A,setA]=useState("8.07131"),[B,setB]=useState("1730.63"),[C,setC]=useState("233.426"),[T,setT]=useState("25");
-  const TK=celsiusToKelvin(T), error=kelvinError("Temperature",TK);
-  const p=error?NaN:Math.pow(10,number(A)-number(B)/(number(T)+number(C))), pkPa=p*0.133322;
-  return <Card><Header title="Antoine Equation Solver" text="Vapor pressure from Antoine constants."/>
-    <Reference items={["log10(P*) = A − B/(T + C)", "Temperature in Kelvin cannot be less than 0.", "Check constants units before trusting the result."]}/>
-    <AlertBox>{error}</AlertBox>
-    <div className="grid4"><Input label="A" value={A} setValue={setA}/><Input label="B" value={B} setValue={setB}/><Input label="C" value={C} setValue={setC}/><Input label="T" value={T} setValue={setT} unit="°C"/></div>
-    <ResultBox title="Final Answer">{`P* = ${fmt(p)} mmHg = ${fmt(pkPa)} kPa`}</ResultBox>
-  </Card>
-}
-
-function EnergyBalance() {
-  const [m,setM]=useState("2"),[cp,setCp]=useState("4.18"),[tin,setTin]=useState("25"),[tout,setTout]=useState("80"),[mol,setMol]=useState("0"),[dh,setDh]=useState("0");
-  const TinK=celsiusToKelvin(tin), ToutK=celsiusToKelvin(tout);
-  const errors=[invalidNegative("Mass flowrate",m),invalidNegative("Cp",cp),invalidNegative("Molar flow",mol),kelvinError("Tin",TinK),kelvinError("Tout",ToutK)].filter(Boolean);
-  const error=errors[0]||"";
-  const sensible=error?NaN:number(m)*number(cp)*(number(tout)-number(tin)), reaction=error?NaN:number(mol)*number(dh), total=sensible+reaction;
-  return <Card><Header title="Energy Balance Solver" text="Basic sensible and reaction heat duty."/>
-    <Reference items={["Q sensible = mDot Cp ΔT", "Q reaction = nDot ΔHrxn", "Mass/moles cannot be negative.", "Temperature in Kelvin cannot be less than 0."]}/>
-    <AlertBox>{error}</AlertBox>
-    <div className="grid3"><Input label="mDot" value={m} setValue={setM} unit="kg/s"/><Input label="Cp" value={cp} setValue={setCp} unit="kJ/kg°C"/><Input label="Tin" value={tin} setValue={setTin} unit="°C"/><Input label="Tout" value={tout} setValue={setTout} unit="°C"/><Input label="nDot reaction" value={mol} setValue={setMol} unit="mol/s"/><Input label="ΔHrxn" value={dh} setValue={setDh} unit="kJ/mol"/></div>
-    <ResultBox title="Final Answer">{`Q sensible = ${fmt(sensible)} kW
-Q reaction = ${fmt(reaction)} kW
-Q total = ${fmt(total)} kW`}</ResultBox>
-  </Card>
-}
-
-function SteamSystem() {
-  const [mode,setMode]=useState("wet-steam"),[hf,setHf]=useState("419"),[hg,setHg]=useState("2676"),[x,setX]=useState("0.85"),[m,setM]=useState("4.1667"),[h1,setH1]=useState("2676"),[h2,setH2]=useState("3445"),[ws,setWs]=useState("1500");
-  const xf=toFraction(x);
-  const errors=[invalidNegative("hf",hf),invalidNegative("hg",hg),invalidNegative("Mass flowrate",m)].filter(Boolean);
-  if(xf.error) errors.push("Steam quality must be 0–1 or 0%–100%.");
-  const error=errors[0]||"";
-  const hWet=error?NaN:number(hf)+xf.value*(number(hg)-number(hf)), Q=error?NaN:number(m)*(number(h2)-number(h1)), turbineQ=error?NaN:number(m)*(number(h2)-number(h1))+number(ws);
-  return <Card><Header title="Steam / Enthalpy System" text="Steam-table helper. Enter table enthalpy values manually."/>
-    <Reference items={["Wet steam: h = hf + x(hg−hf)", "Heater: Q = mDot(hout−hin)", "Open system: Q − Ws = ΔH", "Built-in full steam tables are a future upgrade."]}/>
-    <AlertBox>{error}</AlertBox>
-    <div className="grid3"><Select label="Mode" value={mode} setValue={setMode} options={["wet-steam","heater","turbine"]}/><Input label="Mass flowrate" value={m} setValue={setM} unit="kg/s"/><Input label="Quality x" value={x} setValue={setX} unit="0–1 or %"/><Input label="hf" value={hf} setValue={setHf} unit="kJ/kg"/><Input label="hg" value={hg} setValue={setHg} unit="kJ/kg"/><Input label="h in / h1" value={h1} setValue={setH1} unit="kJ/kg"/><Input label="h out / h2" value={h2} setValue={setH2} unit="kJ/kg"/><Input label="Shaft work" value={ws} setValue={setWs} unit="kW"/></div>
-    <ResultBox title="Final Answer">{mode==="wet-steam" ? `h = hf + x(hg−hf) = ${fmt(hWet)} kJ/kg` : mode==="heater" ? `Q = mDot(hout−hin) = ${fmt(Q)} kW` : `Q = ΔH + Ws = ${fmt(turbineQ)} kW`}</ResultBox>
-  </Card>
-}
-
-function RecyclePurge() {
-  return <Card><Header title="Recycle / Purge Solver" text="Guided methanol-style purge module."/>
-    <Reference items={["This module is intentionally guided, not universal.", "Universal recycle/purge needs equation setup and degrees of freedom.", "Next upgrade: add full stream table input."]}/>
-    <ResultBox title="Status">{`Recycle/purge framework is included conceptually.
-Next serious upgrade: full stream table + component balance equations.`}</ResultBox>
-  </Card>
-}
-
-function App() {
-  const [tab,setTab]=useState("converter");
-  const [dark,setDark]=useState(false);
-  const modules=[
-    ["converter",RotateCcw,"Unit Converter","Chapter 3 conversions"],
-    ["sg",Droplets,"SG & kmol","Density → moles"],
-    ["composition",Calculator,"Composition","Mass ↔ mole fraction"],
-    ["tank",Factory,"Tank Balance","Accumulation"],
-    ["material",GitBranch,"Material Balance","A → C reactor"],
-    ["stoich",TestTube2,"Stoichiometry","Limiting/excess"],
-    ["gas",Wind,"Ideal Gas","PV = nRT"],
-    ["humidity",Droplets,"Raoult/Humidity","Gas-vapor"],
-    ["antoine",Calculator,"Antoine","Vapor pressure"],
-    ["energy",Flame,"Energy Balance","Q duty"],
-    ["steam",Thermometer,"Steam/Enthalpy","Steam helper"],
-    ["purge",Factory,"Recycle/Purge","Framework"]
-  ];
-  return <div className={dark?"app dark":"app"}>
-    <main className="layout">
-      <section className="hero">
-        <div className="hero-left">
-          <div className="tag"><Beaker size={16}/> Built specifically for Chemical Engineering BASIC-A</div>
-          <div className="brand"><LogoMark dark={dark}/><div><h1>ChemSolver BASIC-A</h1><p>Given → Formula → Substitution → Final Answer</p></div></div>
-        </div>
-        <button className="toggle" onClick={()=>setDark(!dark)}>{dark?<Sun size={18}/>:<Moon size={18}/>} {dark?"Light":"Dark"}</button>
-      </section>
-      <section className="content">
-        <aside>
-          {modules.map(([id,Icon,title,sub])=><SectionButton key={id} active={tab===id} onClick={()=>setTab(id)} icon={Icon} title={title} subtitle={sub}/>)}
-          <div className="rules"><b>Validation Rules</b><br/>Mass, moles, pressure, volume, flowrate, SG, Cp cannot be negative. T(K) cannot be less than 0. Fractions accept 0–1 or 0%–100%.</div>
-        </aside>
-        <section className="panel">
-          {tab==="converter"&&<UnitConverter/>}
-          {tab==="sg"&&<SGMoles/>}
-          {tab==="composition"&&<CompositionSolver/>}
-          {tab==="tank"&&<TankBalance/>}
-          {tab==="material"&&<MaterialBalance/>}
-          {tab==="stoich"&&<StoichSolver/>}
-          {tab==="gas"&&<IdealGas/>}
-          {tab==="humidity"&&<HumiditySolver/>}
-          {tab==="antoine"&&<AntoineSolver/>}
-          {tab==="energy"&&<EnergyBalance/>}
-          {tab==="steam"&&<SteamSystem/>}
-          {tab==="purge"&&<RecyclePurge/>}
-        </section>
-      </section>
-      <footer>ChemSolver BASIC-A © Osama AJ — Educational engineering calculator.</footer>
-    </main>
-  </div>
-}
-createRoot(document.getElementById("root")).render(<App />);
+function App(){const [tab,setTab]=useState("templates"),[dark,setDark]=useState(false);let tabs=[["templates",LayoutTemplate,"Templates","Common problems"],["equations",FileText,"Equation Sheet","Formulas"],["flow",Map,"Flow Diagrams","Visual"],["converter",Calculator,"Converter","Units"],["sg",Droplets,"SG & kmol","Density"],["tank",Factory,"Tank","Balance"],["material",GitBranch,"Material","A→C"],["stoich",TestTube2,"Stoich","Limiting"],["gas",Wind,"Ideal Gas","PV=nRT"],["humidity",Droplets,"Humidity","Raoult"],["energy",Flame,"Energy","Q"],["steam",Thermometer,"Steam","Enthalpy"]];return <div className={dark?"app dark":"app"}><main><section className="hero"><div><div className="tag"><Beaker size={16}/> Built specifically for Chemical Engineering BASIC-A</div><div className="brand"><Logo/><div><h1>ChemSolver BASIC-A</h1><p>Given → Formula → Substitution → Final Answer</p></div></div></div><button className="toggle" onClick={()=>setDark(!dark)}>{dark?<Sun/>:<Moon/>}{dark?"Light":"Dark"}</button></section><section className="content"><aside>{tabs.map(([id,I,t,s])=><Nav key={id} id={id} tab={tab} setTab={setTab} Icon={I} title={t} sub={s}/>)}</aside><section>{tab==="templates"&&<Templates go={setTab}/>} {tab==="equations"&&<Equations/>}{tab==="flow"&&<FlowPage/>}{tab==="converter"&&<Converter/>}{tab==="sg"&&<SG/>}{tab==="tank"&&<Tank/>}{tab==="material"&&<Material/>}{tab==="stoich"&&<Stoich/>}{tab==="gas"&&<Gas/>}{tab==="humidity"&&<Humidity/>}{tab==="energy"&&<Energy/>}{tab==="steam"&&<Steam/>}</section></section><footer>ChemSolver BASIC-A © Osama AJ</footer></main></div>}
+createRoot(document.getElementById("root")).render(<App/>);
