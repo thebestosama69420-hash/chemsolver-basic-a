@@ -1,2 +1,3 @@
-# ChemSolver BASIC-A v3
-Adds Antoine presets, Tables page, and Feedback page.
+# ChemSolver BASIC-A v4 UX
+
+Cleaner category navigation, feedback at bottom, and dynamic Antoine manual + presets.
