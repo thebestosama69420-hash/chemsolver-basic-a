@@ -1,3 +1,13 @@
-# ChemSolver BASIC-A v4 UX
+# ChemSolver BASIC-A v5 Mobile & Clarity
 
-Cleaner category navigation, feedback at bottom, and dynamic Antoine manual + presets.
+Updates:
+- Mobile-first menu drawer
+- Sticky quick review bar on phones
+- Cleaner academic equation display
+- More readable solution text
+- Better mobile spacing and scrolling
+- Keeps v4 UX structure and calculators
+
+Run:
+npm install
+npm run dev
