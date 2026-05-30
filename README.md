@@ -1,12 +1,11 @@
-# ChemSolver BASIC-A v5 Mobile & Clarity
+# ChemSolver BASIC-A v6 Smart Assistant
 
 Updates:
-- Mobile-first menu drawer
-- Sticky quick review bar on phones
-- Cleaner academic equation display
-- More readable solution text
-- Better mobile spacing and scrolling
-- Keeps v4 UX structure and calculators
+- Favorites with local storage
+- Common Mistakes inside solvers
+- Which Equation Should I Use advisor
+- Academic equation styling
+- Keeps mobile clarity from v5
 
 Run:
 npm install
